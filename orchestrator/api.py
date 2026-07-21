@@ -43,6 +43,19 @@ def search(q: str):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+# Admin endpoints (protected by API key)
+@app.get("/admin/tasks")
+def admin_list_tasks(authorized: bool = Depends(verify_api_key)):
+    """Return all tasks in the DB for debugging/admins."""
+    return tasks.list()
+
+
+@app.get("/admin/memory")
+def admin_memory(authorized: bool = Depends(verify_api_key)):
+    """Return full memory store for debugging/admins."""
+    return memory.all()
+
+
 @app.post("/tasks")
 def create_task(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(verify_api_key)):
     task = tasks.create(payload)
