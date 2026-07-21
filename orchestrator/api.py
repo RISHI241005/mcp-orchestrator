@@ -11,6 +11,7 @@ from orchestrator.memory import MemoryStore
 from orchestrator.router import Router
 from orchestrator.tasks import TaskStore
 from orchestrator.ai import llm_prioritize, llm_parse_order, place_order_via_mcp
+from orchestrator.oauth import build_authorize_url, exchange_code_for_token, get_token_for_server
 from typing import Dict, Any
 
 app = FastAPI(title="MCP Orchestrator API")
@@ -47,6 +48,33 @@ def search(q: str):
     try:
         res = client.search_restaurants(q)
         return res
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get('/auth/start')
+def auth_start(server: str = 'food'):
+    """Start PKCE OAuth flow — returns JSON with authorize URL and state and also redirects the client to the authorize URL.
+
+    Use this endpoint to initiate login from Claude Desktop or a browser. The redirect URI must be registered with Swiggy Builders Club and match ORCH_SWIGGY_REDIRECT_URI.
+    """
+    try:
+        data = build_authorize_url(server=server)
+        # return both so clients that want JSON can read it; also redirect for browser flows
+        return {"authorize_url": data["url"], "state": data["state"]}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get('/auth/callback')
+def auth_callback(code: str = None, state: str = None):
+    """OAuth redirect callback that exchanges the code for an access token and stores it in memory."""
+    if not code or not state:
+        raise HTTPException(status_code=400, detail='code and state required')
+    try:
+        info = exchange_code_for_token(code=code, state=state)
+        # Redirect to admin UI after successful auth
+        return RedirectResponse(url='/admin/ui')
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
