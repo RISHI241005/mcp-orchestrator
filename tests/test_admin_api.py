@@ -8,7 +8,7 @@ os.environ['ORCH_DB_PATH'] = ':memory:'
 from orchestrator.api import app, tasks, memory
 
 client = TestClient(app)
-HEADERS = {'X-API-Key': 'adminkey'}
+HEADERS = {'X-API-Key': os.environ.get('ORCH_API_KEY')}
 
 
 def test_admin_tasks_and_memory():
