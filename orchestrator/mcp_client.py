@@ -30,6 +30,19 @@ class MCPClient:
             except Exception:
                 self._config = {}
 
+        # Allow overriding API keys via environment variables for secure deployments
+        # e.g., FOOD_API_KEY, INSTAMART_API_KEY, DINEOUT_API_KEY
+        servers = self._config.get("servers") if isinstance(self._config, dict) else None
+        if servers:
+            for name, cfg in list(servers.items()):
+                env_key = f"{name.upper()}_API_KEY"
+                env_url = f"{name.upper()}_URL"
+                if os.environ.get(env_key):
+                    cfg["api_key"] = os.environ.get(env_key)
+                if os.environ.get(env_url):
+                    cfg["url"] = os.environ.get(env_url)
+            self._config["servers"] = servers
+
     def get_server_config(self, name: str) -> Dict[str, Any]:
         servers = self._config.get("servers") if isinstance(self._config, dict) else None
         if not servers:

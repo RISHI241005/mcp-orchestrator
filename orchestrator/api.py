@@ -2,11 +2,13 @@
 
 Provides a health endpoint and a simple search endpoint that delegates to MCPClient.
 """
-from fastapi import FastAPI, HTTPException, Body
+import os
+from fastapi import FastAPI, HTTPException, Body, Depends, Header
 from orchestrator.mcp_client import MCPClient
 from orchestrator.prioritizer import Prioritizer
 from orchestrator.memory import MemoryStore
 from orchestrator.router import Router
+from orchestrator.tasks import TaskStore
 from typing import Dict, Any
 
 app = FastAPI(title="MCP Orchestrator API")
@@ -14,9 +16,17 @@ client = MCPClient()
 prioritizer = Prioritizer()
 memory = MemoryStore()
 router = Router()
+tasks = TaskStore()
 
-# Simple in-memory task store for demo purposes
-_task_store: Dict[str, Dict[str, Any]] = {}
+# API key auth: set ORCH_API_KEY to enable; if unset, endpoints are open for local dev
+API_KEY = os.environ.get("ORCH_API_KEY")
+
+def verify_api_key(x_api_key: str | None = Header(None)):
+    if not API_KEY:
+        return True
+    if x_api_key == API_KEY:
+        return True
+    raise HTTPException(status_code=401, detail="Invalid API Key")
 
 
 @app.get("/health")
@@ -34,20 +44,18 @@ def search(q: str):
 
 
 @app.post("/tasks")
-def create_task(payload: Dict[str, Any] = Body(...)):
-    tid = payload.get("id") or f"task-{len(_task_store)+1}"
-    payload["id"] = tid
-    _task_store[tid] = payload
-    return payload
+def create_task(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(verify_api_key)):
+    task = tasks.create(payload)
+    return task
 
 
 @app.get("/tasks")
-def list_tasks():
-    return list(_task_store.values())
+def list_tasks(authorized: bool = Depends(verify_api_key)):
+    return tasks.list()
 
 
 @app.post("/prioritize")
-def prioritize(payload: Dict[str, Any] = Body(...)):
+def prioritize(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(verify_api_key)):
     """Accept a JSON body like {"task": {...}, "context": {...}} or a bare task object."""
     try:
         if "task" in payload:
@@ -63,7 +71,7 @@ def prioritize(payload: Dict[str, Any] = Body(...)):
 
 
 @app.post("/route")
-def route(task: Dict[str, Any] = Body(...)):
+def route(task: Dict[str, Any] = Body(...), authorized: bool = Depends(verify_api_key)):
     try:
         target = router.route(task)
         return {"server": target}
@@ -72,7 +80,7 @@ def route(task: Dict[str, Any] = Body(...)):
 
 
 @app.post("/order")
-def place_order(payload: Dict[str, Any] = Body(...)):
+def place_order(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(verify_api_key)):
     """Accepts {"server": "food", ...order...} or bare order JSON (defaults server to 'food')."""
     try:
         server = payload.get("server", "food")

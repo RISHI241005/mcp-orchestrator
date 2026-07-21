@@ -1,4 +1,10 @@
+import os
 from fastapi.testclient import TestClient
+
+# Ensure API key and DB path are set for tests
+os.environ['ORCH_API_KEY'] = 'testkey'
+os.environ['ORCH_DB_PATH'] = ':memory:'
+
 from orchestrator.api import app
 
 client = TestClient(app)
