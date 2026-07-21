@@ -71,8 +71,17 @@ class MCPClient:
         # Make a real HTTP request when possible
         api_key = cfg.get('api_key')
         headers = {}
-        if api_key:
-            # set both common patterns; server docs will clarify exact header
+        # Prefer OAuth token if present (from PKCE flow)
+        try:
+            from orchestrator.oauth import get_token_for_server
+        except Exception:
+            get_token_for_server = None
+        if callable(get_token_for_server):
+            tok = get_token_for_server(server_name)
+            if tok and isinstance(tok, dict) and tok.get('access_token'):
+                headers['Authorization'] = f"Bearer {tok['access_token']}"
+        # fallback to api_key header if token not present
+        if 'Authorization' not in headers and api_key:
             headers['Authorization'] = f"Bearer {api_key}"
             headers['X-API-Key'] = api_key
         url = url_base.rstrip("/") + "/" + path.lstrip("/")
