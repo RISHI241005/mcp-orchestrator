@@ -44,7 +44,15 @@ def check_key_role(key: str) -> Optional[str]:
     if not key:
         return None
     keys = get_all_keys()
-    return keys.get(key)
+    role = keys.get(key)
+    if role:
+        return role
+    # Fallback to single ORCH_API_KEY env var for compatibility
+    single = os.environ.get('ORCH_API_KEY')
+    if single and single == key:
+        # treat single ORCH_API_KEY as admin by default
+        return 'admin'
+    return None
 
 
 def add_key(key: str, role: str = "user") -> None:
@@ -58,3 +66,27 @@ def remove_key(key: str) -> None:
     if key in keys:
         keys.pop(key)
         memory.set("api_keys", keys)
+
+
+# Dependency generator for FastAPI to require a role
+from fastapi import HTTPException, Request
+import os
+
+
+def require_role(role: str):
+    def _dep(request: Request):
+        header_val = request.headers.get('x-api-key') or request.headers.get('x-api_key') or request.headers.get('x-apiKey')
+        key_role = check_key_role(header_val) if header_val else None
+        if not get_all_keys() and not os.environ.get('ORCH_API_KEY'):
+            return True
+        # when ORCH_API_KEY is set, treat that as admin also
+        if os.environ.get('ORCH_API_KEY') and header_val == os.environ.get('ORCH_API_KEY'):
+            key_role = 'admin'
+        if key_role is None:
+            raise HTTPException(status_code=401, detail="Invalid API Key")
+        if role == 'user' and key_role in ('user', 'admin'):
+            return True
+        if role == 'admin' and key_role == 'admin':
+            return True
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    return _dep

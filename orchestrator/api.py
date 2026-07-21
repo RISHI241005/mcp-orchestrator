@@ -18,33 +18,15 @@ memory = MemoryStore()
 router = Router()
 tasks = TaskStore()
 
+# Mount UI router
+from orchestrator.ui import router as ui_router
+app.include_router(ui_router)
+
 # API key auth: set ORCH_API_KEY to enable; if unset, endpoints are open for local dev
 
 from fastapi import Request
 
-from orchestrator.auth import check_key_role, add_key, remove_key, get_all_keys
-
-
-def require_role(role: str):
-    def _dep(request: Request):
-        # read header
-        header_val = request.headers.get('x-api-key') or request.headers.get('x-api_key') or request.headers.get('x-apiKey')
-        key_role = check_key_role(header_val) if header_val else None
-        if not get_all_keys() and not os.environ.get('ORCH_API_KEY'):
-            # no keys configured, allow open access for dev
-            return True
-        # when ORCH_API_KEY is set, treat that as admin also
-        if os.environ.get('ORCH_API_KEY') and header_val == os.environ.get('ORCH_API_KEY'):
-            key_role = 'admin'
-        if key_role is None:
-            raise HTTPException(status_code=401, detail="Invalid API Key")
-        # roles: admin > user. simple mapping: admin can do everything
-        if role == 'user' and key_role in ('user', 'admin'):
-            return True
-        if role == 'admin' and key_role == 'admin':
-            return True
-        raise HTTPException(status_code=403, detail="Insufficient role")
-    return _dep
+from orchestrator.auth import check_key_role, add_key, remove_key, get_all_keys, require_role
 
 
 @app.get("/health")
