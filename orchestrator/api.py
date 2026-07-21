@@ -4,6 +4,7 @@ Provides a health endpoint and a simple search endpoint that delegates to MCPCli
 """
 import os
 from fastapi import FastAPI, HTTPException, Body, Depends, Header
+from fastapi.responses import RedirectResponse
 from orchestrator.mcp_client import MCPClient
 from orchestrator.prioritizer import Prioritizer
 from orchestrator.memory import MemoryStore
@@ -32,6 +33,12 @@ from orchestrator.auth import check_key_role, add_key, remove_key, get_all_keys,
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/", include_in_schema=False)
+def root_redirect():
+    """Redirect root to the interactive API docs for convenience."""
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/search")
