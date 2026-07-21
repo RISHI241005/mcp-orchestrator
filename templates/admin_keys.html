@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Orchestrator Admin - API Keys</title>
+  </head>
+  <body>
+    <h1>API Keys</h1>
+    {% if keys %}
+    <ul>
+      {% for k, r in keys.items() %}
+      <li>{{ k }} : {{ r }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>No keys configured.</p>
+    {% endif %}
+
+    <h2>Add Key</h2>
+    <div>
+      Key (leave blank to generate): <input id="add-key" />
+      Role: <select id="add-role"><option value="user">user</option><option value="admin">admin</option></select>
+      <button id="btn-add">Add (AJAX)</button>
+    </div>
+
+    <h2>Remove Key</h2>
+    <div>
+      Key: <input id="remove-key" />
+      <button id="btn-remove">Remove (AJAX)</button>
+    </div>
+
+    <script>
+      async function postJSON(url, data) {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+          credentials: 'same-origin'
+        });
+        return res.json();
+      }
+
+      document.getElementById('btn-add').addEventListener('click', async (e) => {
+        e.preventDefault();
+        const key = document.getElementById('add-key').value || null;
+        const role = document.getElementById('add-role').value;
+        try {
+          const out = await postJSON('/admin/ui/keys', { key: key, role: role });
+          alert('Added: ' + JSON.stringify(out));
+          location.reload();
+        } catch (err) { alert('Add failed: ' + err); }
+      });
+
+      document.getElementById('btn-remove').addEventListener('click', async (e) => {
+        e.preventDefault();
+        const key = document.getElementById('remove-key').value;
+        if (!key) { alert('Key required'); return; }
+        try {
+          const res = await fetch('/admin/ui/keys/' + encodeURIComponent(key), { method: 'DELETE', credentials: 'same-origin' });
+          const out = await res.json();
+          alert('Removed: ' + JSON.stringify(out));
+          location.reload();
+        } catch (err) { alert('Remove failed: ' + err); }
+      });
+    </script>
+  </body>
+</html>
