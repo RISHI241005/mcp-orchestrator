@@ -9,3 +9,4 @@ async function call(path, opts){
 export function listTasks(){ return call('/tasks', { headers: {'X-API-Key': ''} }) }
 export function createTask(payload){ return call('/tasks', { method: 'POST', headers: {'Content-Type':'application/json','X-API-Key':''}, body: JSON.stringify(payload) }) }
 export function prioritizeTask(payload){ return call('/prioritize', { method: 'POST', headers: {'Content-Type':'application/json','X-API-Key':''}, body: JSON.stringify(payload) }) }
+export function aiOrder(nl){ return call('/ai/order', { method: 'POST', headers: {'Content-Type':'application/json','X-API-Key':''}, body: JSON.stringify({ nl }) }) }

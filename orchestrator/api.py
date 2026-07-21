@@ -10,6 +10,7 @@ from orchestrator.prioritizer import Prioritizer
 from orchestrator.memory import MemoryStore
 from orchestrator.router import Router
 from orchestrator.tasks import TaskStore
+from orchestrator.ai import llm_prioritize, llm_parse_order, place_order_via_mcp
 from typing import Dict, Any
 
 app = FastAPI(title="MCP Orchestrator API")
@@ -93,7 +94,10 @@ def list_tasks(authorized: bool = Depends(require_role('user'))):
 
 @app.post("/prioritize")
 def prioritize(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(require_role('user'))):
-    """Accept a JSON body like {"task": {...}, "context": {...}} or a bare task object."""
+    """Accept a JSON body like {"task": {...}, "context": {...}} or a bare task object.
+
+    This endpoint now delegates to the LLM if OPENAI_API_KEY is set, otherwise falls back to the local Prioritizer.
+    """
     try:
         if "task" in payload:
             task = payload.get("task")
@@ -101,8 +105,9 @@ def prioritize(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(r
         else:
             task = payload
             context = {}
-        score = prioritizer.score(task, context)
-        return {"score": score}
+        # Use LLM when available
+        res = llm_prioritize(task, context)
+        return res
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -125,5 +130,22 @@ def place_order(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(
         order = {k: v for k, v in payload.items() if k != "server"}
         res = client.request(server, path="order", method="POST", json=order)
         return res
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post('/ai/order')
+def ai_order(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(require_role('user'))):
+    """Accepts {"nl": "I want two margherita pizzas and a coke"} and returns a mocked order confirmation.
+
+    Uses the LLM to parse natural language into an order and places it via the MCP client (mocked when no real creds).
+    """
+    nl = payload.get('nl') if isinstance(payload, dict) else None
+    if not nl:
+        raise HTTPException(status_code=400, detail='nl (natural language) field required')
+    try:
+        parsed = llm_parse_order(nl)
+        placed = place_order_via_mcp(client, parsed)
+        return {"parsed": parsed, "placed": placed}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
