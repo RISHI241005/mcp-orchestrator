@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Orchestrator Admin - API Keys</title>
+  </head>
+  <body>
+    <h1>API Keys</h1>
+    {% if keys %}
+    <ul>
+      {% for k, r in keys.items() %}
+      <li>{{ k }} : {{ r }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>No keys configured.</p>
+    {% endif %}
+
+    <h2>Add Key</h2>
+    <form action="/admin/ui/add" method="post">
+      Key (leave blank to generate): <input name="key" />
+      Role: <select name="role"><option value="user">user</option><option value="admin">admin</option></select>
+      <button type="submit">Add</button>
+    </form>
+
+    <h2>Remove Key</h2>
+    <form action="/admin/ui/remove" method="post">
+      Key: <input name="key" />
+      <button type="submit">Remove</button>
+    </form>
+  </body>
+</html>

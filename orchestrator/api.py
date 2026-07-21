@@ -30,8 +30,12 @@ def require_role(role: str):
         # read header
         header_val = request.headers.get('x-api-key') or request.headers.get('x-api_key') or request.headers.get('x-apiKey')
         key_role = check_key_role(header_val) if header_val else None
-        if not get_all_keys() and not os.environ.get('ORCH_API_KEY'):  # no keys configured, allow open access for dev
+        if not get_all_keys() and not os.environ.get('ORCH_API_KEY'):
+            # no keys configured, allow open access for dev
             return True
+        # when ORCH_API_KEY is set, treat that as admin also
+        if os.environ.get('ORCH_API_KEY') and header_val == os.environ.get('ORCH_API_KEY'):
+            key_role = 'admin'
         if key_role is None:
             raise HTTPException(status_code=401, detail="Invalid API Key")
         # roles: admin > user. simple mapping: admin can do everything
