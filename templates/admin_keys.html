@@ -17,16 +17,51 @@
     {% endif %}
 
     <h2>Add Key</h2>
-    <form action="/admin/ui/add" method="post">
-      Key (leave blank to generate): <input name="key" />
-      Role: <select name="role"><option value="user">user</option><option value="admin">admin</option></select>
-      <button type="submit">Add</button>
-    </form>
+    <div>
+      Key (leave blank to generate): <input id="add-key" />
+      Role: <select id="add-role"><option value="user">user</option><option value="admin">admin</option></select>
+      <button id="btn-add">Add (AJAX)</button>
+    </div>
 
     <h2>Remove Key</h2>
-    <form action="/admin/ui/remove" method="post">
-      Key: <input name="key" />
-      <button type="submit">Remove</button>
-    </form>
+    <div>
+      Key: <input id="remove-key" />
+      <button id="btn-remove">Remove (AJAX)</button>
+    </div>
+
+    <script>
+      async function postJSON(url, data) {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+          credentials: 'same-origin'
+        });
+        return res.json();
+      }
+
+      document.getElementById('btn-add').addEventListener('click', async (e) => {
+        e.preventDefault();
+        const key = document.getElementById('add-key').value || null;
+        const role = document.getElementById('add-role').value;
+        try {
+          const out = await postJSON('/admin/ui/keys', { key: key, role: role });
+          alert('Added: ' + JSON.stringify(out));
+          location.reload();
+        } catch (err) { alert('Add failed: ' + err); }
+      });
+
+      document.getElementById('btn-remove').addEventListener('click', async (e) => {
+        e.preventDefault();
+        const key = document.getElementById('remove-key').value;
+        if (!key) { alert('Key required'); return; }
+        try {
+          const res = await fetch('/admin/ui/keys/' + encodeURIComponent(key), { method: 'DELETE', credentials: 'same-origin' });
+          const out = await res.json();
+          alert('Removed: ' + JSON.stringify(out));
+          location.reload();
+        } catch (err) { alert('Remove failed: ' + err); }
+      });
+    </script>
   </body>
 </html>

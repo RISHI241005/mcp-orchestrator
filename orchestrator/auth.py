@@ -71,12 +71,38 @@ def remove_key(key: str) -> None:
 # Dependency generator for FastAPI to require a role
 from fastapi import HTTPException, Request
 import os
+import base64
+
+
+def _check_basic_auth(header_val: str | None) -> bool:
+    """Validate Basic auth header against ORCH_UI_USERNAME and ORCH_UI_PASSWORD."""
+    if not header_val or not header_val.lower().startswith("basic "):
+        return False
+    try:
+        token = header_val.split(None, 1)[1]
+        decoded = base64.b64decode(token).decode("utf-8")
+        if ":" not in decoded:
+            return False
+        user, pwd = decoded.split(":", 1)
+        ui_user = os.environ.get("ORCH_UI_USERNAME")
+        ui_pwd = os.environ.get("ORCH_UI_PASSWORD")
+        if not ui_user or not ui_pwd:
+            return False
+        return user == ui_user and pwd == ui_pwd
+    except Exception:
+        return False
 
 
 def require_role(role: str):
     def _dep(request: Request):
         header_val = request.headers.get('x-api-key') or request.headers.get('x-api_key') or request.headers.get('x-apiKey')
         key_role = check_key_role(header_val) if header_val else None
+
+        # Allow basic auth via Authorization header if ORCH_UI_USERNAME/PASSWORD set
+        auth_header = request.headers.get('authorization')
+        if _check_basic_auth(auth_header):
+            key_role = 'admin'
+
         if not get_all_keys() and not os.environ.get('ORCH_API_KEY'):
             return True
         # when ORCH_API_KEY is set, treat that as admin also
