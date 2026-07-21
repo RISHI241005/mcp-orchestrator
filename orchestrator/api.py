@@ -19,14 +19,28 @@ router = Router()
 tasks = TaskStore()
 
 # API key auth: set ORCH_API_KEY to enable; if unset, endpoints are open for local dev
-API_KEY = os.environ.get("ORCH_API_KEY")
 
-def verify_api_key(x_api_key: str | None = Header(None)):
-    if not API_KEY:
-        return True
-    if x_api_key == API_KEY:
-        return True
-    raise HTTPException(status_code=401, detail="Invalid API Key")
+from fastapi import Request
+
+from orchestrator.auth import check_key_role, add_key, remove_key, get_all_keys
+
+
+def require_role(role: str):
+    def _dep(request: Request):
+        # read header
+        header_val = request.headers.get('x-api-key') or request.headers.get('x-api_key') or request.headers.get('x-apiKey')
+        key_role = check_key_role(header_val) if header_val else None
+        if not get_all_keys() and not os.environ.get('ORCH_API_KEY'):  # no keys configured, allow open access for dev
+            return True
+        if key_role is None:
+            raise HTTPException(status_code=401, detail="Invalid API Key")
+        # roles: admin > user. simple mapping: admin can do everything
+        if role == 'user' and key_role in ('user', 'admin'):
+            return True
+        if role == 'admin' and key_role == 'admin':
+            return True
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    return _dep
 
 
 @app.get("/health")
@@ -43,32 +57,49 @@ def search(q: str):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-# Admin endpoints (protected by API key)
+# Admin endpoints (protected by API key roles)
 @app.get("/admin/tasks")
-def admin_list_tasks(authorized: bool = Depends(verify_api_key)):
+def admin_list_tasks(authorized: bool = Depends(require_role('admin'))):
     """Return all tasks in the DB for debugging/admins."""
     return tasks.list()
 
 
 @app.get("/admin/memory")
-def admin_memory(authorized: bool = Depends(verify_api_key)):
+def admin_memory(authorized: bool = Depends(require_role('admin'))):
     """Return full memory store for debugging/admins."""
     return memory.all()
 
 
+@app.post('/admin/keys')
+def admin_create_key(payload: Dict[str, str] = Body(...), authorized: bool = Depends(require_role('admin'))):
+    """Create a new API key with role. Payload: {"key": "thekey", "role": "user"} or generate on client."""
+    key = payload.get('key')
+    role = payload.get('role', 'user')
+    if not key:
+        raise HTTPException(status_code=400, detail='key required')
+    add_key(key, role)
+    return {'key': key, 'role': role}
+
+
+@app.delete('/admin/keys/{key}')
+def admin_delete_key(key: str, authorized: bool = Depends(require_role('admin'))):
+    remove_key(key)
+    return {'removed': key}
+
+
 @app.post("/tasks")
-def create_task(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(verify_api_key)):
+def create_task(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(require_role('user'))):
     task = tasks.create(payload)
     return task
 
 
 @app.get("/tasks")
-def list_tasks(authorized: bool = Depends(verify_api_key)):
+def list_tasks(authorized: bool = Depends(require_role('user'))):
     return tasks.list()
 
 
 @app.post("/prioritize")
-def prioritize(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(verify_api_key)):
+def prioritize(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(require_role('user'))):
     """Accept a JSON body like {"task": {...}, "context": {...}} or a bare task object."""
     try:
         if "task" in payload:
@@ -84,7 +115,7 @@ def prioritize(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(v
 
 
 @app.post("/route")
-def route(task: Dict[str, Any] = Body(...), authorized: bool = Depends(verify_api_key)):
+def route(task: Dict[str, Any] = Body(...), authorized: bool = Depends(require_role('user'))):
     try:
         target = router.route(task)
         return {"server": target}
@@ -93,7 +124,7 @@ def route(task: Dict[str, Any] = Body(...), authorized: bool = Depends(verify_ap
 
 
 @app.post("/order")
-def place_order(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(verify_api_key)):
+def place_order(payload: Dict[str, Any] = Body(...), authorized: bool = Depends(require_role('user'))):
     """Accepts {"server": "food", ...order...} or bare order JSON (defaults server to 'food')."""
     try:
         server = payload.get("server", "food")
