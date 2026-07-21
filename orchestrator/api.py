@@ -47,8 +47,15 @@ def list_tasks():
 
 
 @app.post("/prioritize")
-def prioritize(task: Dict[str, Any] = Body(...), context: Dict[str, Any] = Body(default={})):
+def prioritize(payload: Dict[str, Any] = Body(...)):
+    """Accept a JSON body like {"task": {...}, "context": {...}} or a bare task object."""
     try:
+        if "task" in payload:
+            task = payload.get("task")
+            context = payload.get("context", {})
+        else:
+            task = payload
+            context = {}
         score = prioritizer.score(task, context)
         return {"score": score}
     except Exception as exc:
@@ -65,8 +72,12 @@ def route(task: Dict[str, Any] = Body(...)):
 
 
 @app.post("/order")
-def place_order(server: str = Body("food"), order: Dict[str, Any] = Body(...)):
+def place_order(payload: Dict[str, Any] = Body(...)):
+    """Accepts {"server": "food", ...order...} or bare order JSON (defaults server to 'food')."""
     try:
+        server = payload.get("server", "food")
+        # If client expects just order dictionary, send payload without server key
+        order = {k: v for k, v in payload.items() if k != "server"}
         res = client.request(server, path="order", method="POST", json=order)
         return res
     except Exception as exc:
